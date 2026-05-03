@@ -1,11 +1,11 @@
 {
-  "name": "monet2",
+  "name": "monet",
   "version": "1.0.0",
-  "description": "A CLI application for monet2",
+  "description": "A CLI application for monet",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "monet2": "dist/index.js"
+    "monet": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
