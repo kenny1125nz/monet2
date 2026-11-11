@@ -1,6 +1,7 @@
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
+import { log } from '../utils/index.js'
 
 export interface LlmRequest {
   provider: string
@@ -61,27 +62,34 @@ function readJsonFile(filePath: string): MonetConfig {
 }
 
 function loadConfig(): MonetConfig {
-  const global = readJsonFile(path.join(os.homedir(), '.monet', 'config'))
-  const local = readJsonFile(path.join(process.cwd(), '.monet', 'config'))
-  return {
-    llmProviders: { ...global.llmProviders, ...local.llmProviders },
-  }
+  const globalPath = path.join(os.homedir(), '.monet', 'config')
+  const localPath = path.join(process.cwd(), '.monet', 'config')
+  log.debug('loadConfig', { globalPath, localPath })
+  const global = readJsonFile(globalPath)
+  const local = readJsonFile(localPath)
+  const merged = { llmProviders: { ...global.llmProviders, ...local.llmProviders } }
+  log.debug('loadConfig: providers found', { providers: Object.keys(merged.llmProviders ?? {}) })
+  return merged
 }
 
 function resolveProvider(providerName: string): ProviderConfig {
+  log.debug('resolveProvider', { providerName })
   const config = loadConfig()
   const provider = config.llmProviders?.[providerName]
   if (!provider) {
+    log.error('resolveProvider: provider not found', { providerName, available: Object.keys(config.llmProviders ?? {}) })
     throw new Error(
       `LLM provider "${providerName}" not found in config. ` +
         `Add it to ~/.monet/config under "llmProviders".`
     )
   }
   if (!provider.apiKey || !provider.model || !provider.endpoint) {
+    log.error('resolveProvider: provider missing fields', { providerName, hasApiKey: !!provider.apiKey, hasModel: !!provider.model, hasEndpoint: !!provider.endpoint })
     throw new Error(
       `LLM provider "${providerName}" is missing required fields: apiKey, model, endpoint.`
     )
   }
+  log.debug('resolveProvider: resolved', { providerName, model: provider.model, endpoint: provider.endpoint })
   return provider
 }
 
@@ -101,6 +109,7 @@ async function postWithRetry(
   attempt = 0
 ): Promise<Response> {
   const url = `${provider.endpoint.replace(/\/$/, '')}/chat/completions`
+  log.debug('postWithRetry', { url, model: provider.model, attempt })
   let response: Response
 
   try {
@@ -113,17 +122,22 @@ async function postWithRetry(
       body: JSON.stringify({ model: provider.model, ...body }),
     })
   } catch (err) {
+    log.error('postWithRetry: network error', { attempt, err: String(err) })
     if (attempt < MAX_RETRIES) {
-      await sleep(BASE_DELAY_MS * 2 ** attempt)
+      const delay = BASE_DELAY_MS * 2 ** attempt
+      log.info(`postWithRetry: retrying in ${delay}ms`, { attempt })
+      await sleep(delay)
       return postWithRetry(provider, body, attempt + 1)
     }
     throw new Error(`Network error after ${MAX_RETRIES} retries: ${String(err)}`)
   }
 
   if (!response.ok) {
+    log.error('postWithRetry: HTTP error', { status: response.status, attempt })
     if (RETRYABLE_STATUS.has(response.status) && attempt < MAX_RETRIES) {
       const retryAfter = response.headers.get('retry-after')
       const delay = retryAfter ? parseInt(retryAfter) * 1000 : BASE_DELAY_MS * 2 ** attempt
+      log.info(`postWithRetry: retrying after ${delay}ms`, { status: response.status, attempt })
       await sleep(delay)
       return postWithRetry(provider, body, attempt + 1)
     }
@@ -131,6 +145,7 @@ async function postWithRetry(
     throw new Error(`LLM request failed (${response.status}): ${text}`)
   }
 
+  log.debug('postWithRetry: success', { status: response.status })
   return response
 }
 
@@ -173,9 +188,11 @@ function buildBody(request: LlmRequest, extra?: Record<string, unknown>): Record
 
 export const llmCaller: LlmCaller = {
   async call(request) {
+    log.debug('llmCaller.call', { provider: request.provider, messages: request.messages.length })
     const provider = resolveProvider(request.provider)
     const response = await postWithRetry(provider, buildBody(request))
     const data = (await response.json()) as WireResponse
+    log.debug('llmCaller.call: done', { model: data.model, usage: data.usage })
 
     return {
       content: data.choices[0].message.content,
@@ -187,6 +204,7 @@ export const llmCaller: LlmCaller = {
   },
 
   async *callStreaming(request) {
+    log.debug('llmCaller.callStreaming', { provider: request.provider, messages: request.messages.length })
     const provider = resolveProvider(request.provider)
 
     let response: Response

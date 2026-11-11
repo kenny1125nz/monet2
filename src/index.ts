@@ -4,6 +4,7 @@ import { Command } from 'commander'
 import * as path from 'path'
 import { version } from '../package.json'
 import { createCommandInterface, startInteractiveLoop } from './cli-interactions/index.js'
+import { log } from './utils/index.js'
 
 const program = new Command()
 
@@ -15,7 +16,9 @@ program
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
 function workspacePath(): string {
-  return process.cwd()
+  const cwd = process.cwd()
+  log.debug('workspacePath', { cwd })
+  return cwd
 }
 
 async function runOnce(input: string): Promise<void> {

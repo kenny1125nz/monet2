@@ -23,7 +23,9 @@ export interface CommandResult {
 
 ## Acceptance Criteria
 
+- User can list child nodes of the current node with `ls`
 - User can navigate up, down, and across the node tree with `cd` commands — navigation works under any phase or sub-command context
+
 - User can invoke top-level phases: `design`, `build`, `review`
 - Each phase exposes sub-commands for granular operations:
   - `design decompose` — AI proposes child node decomposition
