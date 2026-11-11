@@ -4,3 +4,25 @@ dist/
 *.d.ts
 *.d.ts.map
 .env
+
+# >>> credential-guard (security audit) >>>
+# Secrets / credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+.npmrc
+.netrc
+secrets.*
+credentials.*
+*.secret
+*.secret.*
+*_secret
+*_secret.*
+*tavily*
+# <<< credential-guard (security audit) <<<
